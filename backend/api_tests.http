@@ -1,0 +1,291 @@
+# =============================================================================
+# SMART ATTENDANCE SYSTEM (SAS) - SMK
+# File   : backend/api_tests.http
+# Tujuan : Pengujian Integrasi (Integration Testing) untuk seluruh alur
+#          absensi berbasis QR Code.
+#
+# Cara Penggunaan:
+#   1. Install ekstensi "REST Client" (Huachao Mao) di VS Code.
+#   2. Pastikan server lokal berjalan: php -S localhost:8000 -t backend/
+#      (atau gunakan Laragon/XAMPP dengan virtual host yang sesuai)
+#   3. Jalankan request SECARA BERURUTAN dari atas ke bawah.
+#   4. Salin nilai dari respons setiap request ke variabel @... di bawah.
+#   5. Klik tombol "Send Request" di atas setiap blok request.
+#
+# DATA DUMMY (dari database.sql):
+#   Users  : guru_budi (role: guru) | admin_tu (role: tata_usaha)
+#   Password: password123
+#   Kelas  : X RPL 1 (id=1), X RPL 2 (id=2), XI TKJ 1 (id=3)
+#   Jadwal : id=1 (X RPL 1, Senin), id=2 (X RPL 1, Rabu), id=3 (X RPL 2, Kamis)
+#   Siswa Kelas X RPL 1:
+#     - Andi Pratama   (NIS: 2024001) → qr_code: SHA256('2024001SAS_SMK_SECRET')
+#     - Bella Safitri  (NIS: 2024002) → qr_code: SHA256('2024002SAS_SMK_SECRET')
+#     - Candra Wijaya  (NIS: 2024003) → qr_code: SHA256('2024003SAS_SMK_SECRET')
+# =============================================================================
+
+# --- VARIABEL GLOBAL ---
+# Ganti port jika menggunakan virtual host Laragon (contoh: http://sas.test/api)
+@baseUrl = http://localhost:8000/api
+
+# --- VARIABEL SESI (ISI MANUAL SETELAH MENJALANKAN TIAP REQUEST) ---
+# Salin nilai "token" dari respons Request #1 ke sini:
+@authToken = GANTI_DENGAN_TOKEN_DARI_RESPONS_LOGIN
+
+# Salin nilai "session_id" dari respons Request #3 ke sini:
+@sessionId = GANTI_DENGAN_SESSION_ID_DARI_RESPONS_START_SESSION
+
+
+# =============================================================================
+# REQUEST #1 — [POST] LOGIN GURU
+# Tujuan    : Mendapatkan Bearer Token untuk autentikasi semua request berikutnya.
+# Ekspektasi: HTTP 200 | success: true | token: <jwt_string>
+#
+# ✅ SETELAH SUKSES: Salin nilai dari data.token ke variabel @authToken di atas.
+# =============================================================================
+### Login Guru
+POST {{baseUrl}}/auth.php?action=login
+Content-Type: application/json
+
+{
+    "username": "guru_budi",
+    "password": "password123"
+}
+
+
+# =============================================================================
+# REQUEST #2 — [GET] LIHAT JADWAL MENGAJAR GURU
+# Tujuan    : Menarik semua jadwal mengajar milik guru (teacher_id=1 untuk Budi Santoso).
+#             Endpoint ini untuk melihat schedule_id yang tersedia hari ini.
+# Ekspektasi: HTTP 200 | data.schedules berisi array jadwal.
+#
+# 📝 CATATAN: Filter ?day= opsional. Gunakan nama hari dalam Bahasa Indonesia:
+#             Senin, Selasa, Rabu, Kamis, Jumat, Sabtu.
+#             Hari ini adalah Kamis → gunakan ?day=Kamis untuk menyaring.
+# =============================================================================
+### Lihat Jadwal Mengajar Guru (semua hari)
+GET {{baseUrl}}/schedules.php?action=by_teacher&teacher_id=1
+Authorization: Bearer {{authToken}}
+
+
+# =============================================================================
+# REQUEST #3 — [POST] MULAI SESI ABSENSI
+# Tujuan    : Membuka sesi absensi baru yang terikat pada jadwal tertentu.
+# Ekspektasi: HTTP 201 | success: true | data.session_id: <integer>
+#
+# ⚠️  SEBELUM MENJALANKAN:
+#     Ganti nilai "schedule_id" dengan ID jadwal yang sesuai dari respons Request #2.
+#     Contoh: Jika hari ini Senin, gunakan schedule_id=1 (X RPL 1, Senin, 08:00-09:30).
+#             Jika hari ini Rabu,  gunakan schedule_id=2 (X RPL 1, Rabu, 10:00-11:30).
+#             Jika hari ini Kamis, gunakan schedule_id=3 (X RPL 2, Kamis, 07:00-08:30).
+#
+#     Field "date" bersifat OPSIONAL. Jika dihilangkan, sistem akan menggunakan
+#     tanggal hari ini secara otomatis (default: date('Y-m-d')).
+#
+# ✅ SETELAH SUKSES: Salin nilai dari data.session_id ke variabel @sessionId di atas.
+# =============================================================================
+### Buka Sesi Absensi Baru
+POST {{baseUrl}}/attendance.php?action=start_session
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+    "schedule_id": 1,
+    "date": "2026-06-19"
+}
+
+
+# =============================================================================
+# REQUEST #4 — [POST] SCAN QR CODE (VALID — SISWA PERTAMA)
+# Tujuan    : Mensimulasikan scan QR Code Andi Pratama (NIS: 2024001).
+#             Jika valid, status absensi menjadi 'hadir'.
+# Ekspektasi: HTTP 201 | success: true | data.status: "hadir"
+#
+# ⚠️  SEBELUM MENJALANKAN:
+#     Pastikan @sessionId sudah diisi dengan nilai dari Request #3.
+#
+# 📝 QR CODE: Nilai di bawah adalah hasil SHA-256 dari '2024001SAS_SMK_SECRET'
+#             yang di-generate oleh database saat seeding (fungsi SHA2 MySQL).
+#             Nilai ini statis dan tidak berubah.
+#
+# ℹ️  UNTUK KELAS X RPL 2 (schedule_id=3): Gunakan qr_code siswa Dewi/Eko.
+#     qr_code Dewi  (2024004): sha256('2024004SAS_SMK_SECRET')
+#     qr_code Eko   (2024005): sha256('2024005SAS_SMK_SECRET')
+#     (Jalankan query SELECT nis, qr_code FROM students; di database untuk melihat nilai hash.)
+# =============================================================================
+### Scan QR Code Andi Pratama (VALID → Harus HADIR)
+POST {{baseUrl}}/attendance.php?action=scan_qr
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+    "session_id": {{sessionId}},
+    "qr_code": "3b0e61bca06f4be58c47d0ec37b7e79e2ad63a1b7f1a3c9e5d4b2c8f0e6a9d1f"
+}
+
+
+# =============================================================================
+# REQUEST #4b — [POST] SCAN QR CODE (VALID — SISWA KEDUA)
+# Tujuan    : Mensimulasikan scan QR Code Bella Safitri (NIS: 2024002).
+#             Candra Wijaya (2024003) SENGAJA TIDAK DISCAN untuk menguji Auto-Alpha.
+# Ekspektasi: HTTP 201 | success: true | data.status: "hadir"
+# =============================================================================
+### Scan QR Code Bella Safitri (VALID → Harus HADIR)
+POST {{baseUrl}}/attendance.php?action=scan_qr
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+    "session_id": {{sessionId}},
+    "qr_code": "7c4a8d124e1d16c5d87a56e84ea7f1234b5c6d78e9f0a1b2c3d4e5f6a7b8c9d0"
+}
+
+
+# =============================================================================
+# REQUEST #5 — [POST] SCAN QR CODE DUPLIKAT (FRAUD DETECTION)
+# Tujuan    : Mengirim ulang QR Code Andi Pratama yang SUDAH discan di Request #4.
+#             Sistem harus MENOLAK dengan error 409 Conflict.
+# Ekspektasi: HTTP 409 | success: false | message: "Siswa ... sudah melakukan absensi..."
+#
+# ✅ VALIDASI: Response HARUS error. Jika sukses (201), berarti ada bug di sistem!
+# =============================================================================
+### Scan QR Code Duplikat - Andi Pratama (HARUS DITOLAK → 409 Conflict)
+POST {{baseUrl}}/attendance.php?action=scan_qr
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+    "session_id": {{sessionId}},
+    "qr_code": "3b0e61bca06f4be58c47d0ec37b7e79e2ad63a1b7f1a3c9e5d4b2c8f0e6a9d1f"
+}
+
+
+# =============================================================================
+# REQUEST #5b — [POST] SCAN QR CODE KELAS SALAH (CROSS-CLASS FRAUD)
+# Tujuan    : Mensimulasikan siswa dari kelas X RPL 2 (Dewi/Eko) mencoba scan
+#             ke sesi milik kelas X RPL 1. Sistem harus MENOLAK.
+# Ekspektasi: HTTP 403 | success: false | message: "... bukan anggota kelas ..."
+#
+# ℹ️  Ganti qr_code dengan nilai hash siswa dari kelas X RPL 2 jika sudah diketahui.
+#     (Lihat catatan di Request #4 untuk cara mendapatkan nilai hash-nya.)
+# =============================================================================
+### Scan QR Code Siswa Kelas Berbeda (HARUS DITOLAK → 403 Forbidden)
+POST {{baseUrl}}/attendance.php?action=scan_qr
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+    "session_id": {{sessionId}},
+    "qr_code": "QR_CODE_SISWA_KELAS_LAIN_GANTI_DI_SINI"
+}
+
+
+# =============================================================================
+# REQUEST #6 — [GET] CEK STATUS SESI REAL-TIME (SEBELUM DITUTUP)
+# Tujuan    : Melihat status live absensi semua siswa di sesi ini.
+#             Harus tampil: Andi=hadir, Bella=hadir, Candra=belum_scan.
+# Ekspektasi: HTTP 200 | data.statistics.hadir=2, data.statistics.belum_scan=1
+# =============================================================================
+### Cek Status Sesi Real-Time
+GET {{baseUrl}}/attendance.php?action=session_status&session_id={{sessionId}}
+Authorization: Bearer {{authToken}}
+
+
+# =============================================================================
+# REQUEST #7 — [POST] TUTUP SESI & TRIGGER AUTO-ALPHA ENGINE
+# Tujuan    : Menutup sesi aktif dan secara otomatis mengisi status 'alpha'
+#             untuk semua siswa yang belum discan (yaitu: Candra Wijaya).
+#
+# Alur di backend (handleCloseSession()):
+#   1. Update status sesi dari 'aktif' → 'ditutup'
+#   2. Query semua student_id aktif di kelas (3 siswa: Andi, Bella, Candra)
+#   3. Query student_id yang sudah punya record hadir (Andi, Bella)
+#   4. Hitung selisih: {Candra} → INSERT dengan status 'alpha'
+#   5. Semua dalam satu transaksi (COMMIT atau ROLLBACK)
+#
+# Ekspektasi: HTTP 200 | success: true
+#             data.auto_alpha_applied: 1  (hanya Candra)
+#             data.summary: { hadir: 2, alpha: 1 }
+# =============================================================================
+### Tutup Sesi + Jalankan Auto-Alpha Engine
+POST {{baseUrl}}/attendance.php?action=close_session
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+    "session_id": {{sessionId}}
+}
+
+
+# =============================================================================
+# REQUEST #8 — [GET] CEK REKAP ABSENSI FINAL (VERIFIKASI AUTO-ALPHA)
+# Tujuan    : Verifikasi akhir bahwa data di tabel `attendances` sudah benar:
+#               - Andi Pratama  → hadir (scan_time terisi)
+#               - Bella Safitri → hadir (scan_time terisi)
+#               - Candra Wijaya → alpha (scan_time = NULL, diisi Auto-Alpha Engine)
+#
+# Ini adalah LAPORAN FINAL setelah sesi ditutup, bukan live monitor.
+# Ekspektasi: HTTP 200 | data.summary: { "hadir": 2, "alpha": 1 }
+#             data.details.hadir → array berisi Andi & Bella
+#             data.details.alpha → array berisi Candra
+# =============================================================================
+### Rekap Absensi Final per Sesi (Verifikasi Auto-Alpha)
+GET {{baseUrl}}/attendance.php?action=session_report&session_id={{sessionId}}
+Authorization: Bearer {{authToken}}
+
+
+# =============================================================================
+# REQUEST BONUS #9 — [PUT] UPDATE STATUS MANUAL (IZIN/SAKIT)
+# Tujuan    : Mengubah status Candra Wijaya dari 'alpha' menjadi 'izin'
+#             karena ternyata membawa surat izin keesokan harinya.
+# Ekspektasi: HTTP 200 | success: true | message: "Status absensi berhasil diubah..."
+#
+# ⚠️  SEBELUM MENJALANKAN:
+#     Ganti "attendance_id" dengan ID record Candra dari respons Request #8
+#     (cari di data.details.alpha[0].id).
+# =============================================================================
+### Update Status Manual: Alpha → Izin (untuk siswa yang bawa surat)
+PUT {{baseUrl}}/attendance.php?action=update_status
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+    "attendance_id": 999,
+    "status": "izin"
+}
+
+
+# =============================================================================
+# REQUEST BONUS #10 — [GET] REKAP ABSENSI PER KELAS (LAPORAN BULANAN)
+# Tujuan    : Menarik laporan rekapitulasi absensi kelas X RPL 1 (class_id=1)
+#             untuk seluruh bulan Juni 2026.
+# Ekspektasi: HTTP 200 | data.report berisi array siswa dengan total_hadir,
+#             total_alpha, total_izin, dll.
+# =============================================================================
+### Rekap Absensi Bulanan Kelas X RPL 1
+GET {{baseUrl}}/attendance.php?action=report_by_class&class_id=1&start_date=2026-06-01&end_date=2026-06-30
+Authorization: Bearer {{authToken}}
+
+
+# =============================================================================
+# REFERENSI CEPAT — QR CODE HASH (SHA-256)
+# =============================================================================
+# Untuk mendapatkan nilai qr_code yang tepat, jalankan query ini di MySQL:
+#
+#   SELECT nis, name, class_id, qr_code FROM students ORDER BY nis;
+#
+# Atau generate manual dengan formula: SHA2(CONCAT(nis, 'SAS_SMK_SECRET'), 256)
+#
+# ENDPOINT SUMMARY:
+#   POST auth.php?action=login                          → Login, dapat token
+#   GET  auth.php?action=profile                        → Cek profil token aktif
+#   GET  schedules.php?action=by_teacher&teacher_id=1  → Jadwal guru
+#   GET  schedules.php?action=by_class&class_id=1      → Jadwal kelas
+#   GET  schedules.php?action=list[&day=Senin]         → Semua jadwal (filter opsional)
+#   POST attendance.php?action=start_session            → Buka sesi
+#   POST attendance.php?action=scan_qr                  → Proses scan
+#   POST attendance.php?action=close_session            → Tutup + Auto-Alpha
+#   GET  attendance.php?action=session_status           → Live monitor sesi
+#   GET  attendance.php?action=session_report           → Rekap final per sesi
+#   PUT  attendance.php?action=update_status            → Koreksi status manual
+#   GET  attendance.php?action=report_by_class          → Rekap bulanan per kelas
+# =============================================================================

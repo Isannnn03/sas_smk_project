@@ -1,0 +1,40 @@
+# ============================================================================
+# SMART ATTENDANCE SYSTEM (SAS) - SMK
+# File: backend/.htaccess
+# Tujuan: Konfigurasi Apache untuk backend PHP Native
+# ============================================================================
+
+# Pastikan mod_rewrite aktif
+Options -Indexes
+Options +FollowSymLinks
+
+# Nonaktifkan directory listing untuk keamanan
+<IfModule mod_autoindex.c>
+    DirectoryIndex disabled
+</IfModule>
+
+# Lindungi file konfigurasi dari akses langsung
+<FilesMatch "^(database\.php|helpers\.php)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# CORS & Caching untuk asset statis
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# Aktifkan mod_rewrite
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /sas_smk_project/backend/
+
+    # Jangan rewrite untuk file/direktori yang benar-benar ada
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Arahkan semua request yang tidak cocok ke index.php (opsional untuk router terpusat)
+    # RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
