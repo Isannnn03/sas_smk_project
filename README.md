@@ -104,14 +104,22 @@ Body: { "username": "admin_tu", "password": "password123" }
 
 ---
 
-## Autentikasi
+## Autentikasi dan Token
 
 Semua endpoint (kecuali login) membutuhkan token di header:
 ```
 Authorization: Bearer <token_dari_login>
 ```
 
-Token berlaku selama **8 jam** dan berbasis HMAC-SHA256.
+### Cara Kerja Token
+Sistem menggunakan token kustom berbasis HMAC-SHA256 (mirip dengan konsep JWT). Token ini terdiri dari dua bagian yang digabung dengan tanda titik (`.`):
+`[DATA_TERENKRIPSI_BASE64].[TANDA_TANGAN_RAHASIA]`
+
+1. **Payload (Data Utama):** Berisi data penting seperti `user_id`, `role`, `exp` (waktu kadaluarsa 8 jam), dan `iat` (waktu cetak token).
+2. **Encoding:** Payload diubah menggunakan `base64_encode` agar aman dikirim melalui HTTP.
+3. **Signature (Tanda Tangan):** Payload yang sudah di-encode lalu di-hash menggunakan algoritma HMAC-SHA256 bersama dengan `TOKEN_SECRET` yang ada di konfigurasi server. Ini memastikan token tidak bisa dipalsukan atau diubah isinya oleh pihak luar.
+
+Jika client mengirim request, server akan memvalidasi signature token tersebut. Jika valid dan belum expired, maka akses diberikan.
 
 ---
 
