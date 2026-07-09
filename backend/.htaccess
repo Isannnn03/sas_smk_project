@@ -8,9 +8,9 @@
 Options -Indexes
 Options +FollowSymLinks
 
-# Nonaktifkan directory listing untuk keamanan
-<IfModule mod_autoindex.c>
-    DirectoryIndex disabled
+# Tentukan urutan file index (Dashboard SPA prioritas utama)
+<IfModule mod_dir.c>
+    DirectoryIndex index.html index.php
 </IfModule>
 
 # Lindungi file konfigurasi dari akses langsung
@@ -29,12 +29,15 @@ Options +FollowSymLinks
 # Aktifkan mod_rewrite
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /sas_smk_project/backend/
+    RewriteBase "/sas smk project/sas_smk_project/backend/"
+
+    # Pass Authorization header to PHP
+    SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
 
     # Jangan rewrite untuk file/direktori yang benar-benar ada
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
 
-    # Arahkan semua request yang tidak cocok ke index.php (opsional untuk router terpusat)
-    # RewriteRule ^(.*)$ index.php [QSA,L]
+    # Arahkan semua request yang tidak cocok ke index.html untuk Vue Router (SPA)
+    RewriteRule ^(.*)$ index.html [QSA,L]
 </IfModule>

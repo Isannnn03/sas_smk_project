@@ -26,6 +26,8 @@ class AttendanceProvider with ChangeNotifier {
       final sessionId = await _attendanceService.startSession(scheduleId);
       _activeSessionId = sessionId;
       await fetchSessionStatus(sessionId);
+      _isLoading = false;
+      notifyListeners();
       return true;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
@@ -41,7 +43,7 @@ class AttendanceProvider with ChangeNotifier {
       
       _sessionStatus = AttendanceSessionModel.fromJson(data['session']);
       
-      final List<dynamic> detailsJson = data['details'];
+      final List<dynamic> detailsJson = data['attendances'];
       _attendanceRecords = detailsJson.map((json) => AttendanceRecordModel.fromJson(json)).toList();
       
       notifyListeners();
@@ -56,8 +58,8 @@ class AttendanceProvider with ChangeNotifier {
     
     try {
       final message = await _attendanceService.scanQr(_activeSessionId!, qrCode);
-      // Background refresh to update counters
-      fetchSessionStatus(_activeSessionId!);
+      // Await refresh to prevent race condition between consecutive scans
+      await fetchSessionStatus(_activeSessionId!);
       return message; // Success message
     } catch (e) {
       throw Exception(e.toString().replaceAll('Exception: ', ''));

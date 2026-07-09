@@ -242,24 +242,29 @@ function handleScanQr(): void
         sendResponse(false, 'Sesi absensi ini sudah ditutup. Scan QR Code tidak dapat diproses.', null, 403);
     }
 
-    // --- VALIDASI 2: Parsing JSON dan Cek Signature (Anti-Forgery) ---
-    $qrData = json_decode($qrCode, true);
+    // --- VALIDASI 2: Parsing format compact dan Cek Signature (Anti-Forgery) ---
+    // Format QR: SAS|student_id|nis|signature_16chars
+    $qrParts = explode('|', $qrCode);
     
-    // Pastikan QR Code mengandung semua key yang diwajibkan
-    if (!$qrData || !isset($qrData['student_id'], $qrData['nis'], $qrData['uuid'], $qrData['signature_hash'])) {
+    // Pastikan QR Code memiliki format yang benar (4 bagian, diawali SAS)
+    if (count($qrParts) !== 4 || $qrParts[0] !== 'SAS') {
         sendResponse(false, 'Format QR Code tidak valid atau rusak.', null, 400);
     }
+
+    $qrStudentId = (int) $qrParts[1];
+    $qrNis       = $qrParts[2];
+    $qrSignature = $qrParts[3];
 
     $secretKey = 'SAS_SMK_SECRET_KEY_2026';
     
     // Rekonstruksi string data untuk divalidasi
-    $dataString = $qrData['student_id'] . '|' . $qrData['nis'] . '|' . $qrData['uuid'];
+    $dataString = $qrStudentId . '|' . $qrNis;
     
-    // Rekalkulasi hash menggunakan secret key server
-    $recalculatedSignature = hash_hmac('sha256', $dataString, $secretKey);
+    // Rekalkulasi hash menggunakan secret key server (16 karakter pertama)
+    $recalculatedSignature = substr(hash_hmac('sha256', $dataString, $secretKey), 0, 16);
 
-    // Cocokkan hasil hash server dengan hash bawaan QR Code menggunakan perbandingan constant-time
-    if (!hash_equals($recalculatedSignature, $qrData['signature_hash'])) {
+    // Cocokkan hasil hash server dengan hash bawaan QR Code
+    if (!hash_equals($recalculatedSignature, $qrSignature)) {
         sendResponse(false, 'QR Code palsu atau tidak sah! Signature tidak valid.', null, 403);
     }
 
@@ -271,8 +276,8 @@ function handleScanQr(): void
          LIMIT 1'
     );
     $studentStmt->execute([
-        ':id'  => $qrData['student_id'],
-        ':nis' => $qrData['nis']
+        ':id'  => $qrStudentId,
+        ':nis' => $qrNis
     ]);
     $student = $studentStmt->fetch();
 

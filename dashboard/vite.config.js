@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
+  base: '/sas smk project/sas_smk_project/backend/',
   plugins: [vue()],
   resolve: {
     alias: {

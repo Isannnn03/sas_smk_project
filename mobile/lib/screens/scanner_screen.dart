@@ -18,7 +18,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
   );
 
   bool _isProcessing = false;
-  DateTime? _lastScanTime;
+  // Menyimpan SEMUA QR yang sudah berhasil di-scan dalam sesi ini.
+  // QR yang sudah ada di Set ini akan langsung diabaikan oleh kamera,
+  // sehingga tidak ada scan duplikat meskipun kamera masih membaca QR lama.
+  final Set<String> _scannedQrCodes = {};
 
   @override
   void dispose() {
@@ -33,17 +36,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
     final String qrCode = barcodes.first.rawValue ?? "";
     if (qrCode.isEmpty) return;
 
-    // Cooldown 2 seconds to prevent multiple api calls for the same QR
-    if (_lastScanTime != null &&
-        DateTime.now().difference(_lastScanTime!).inSeconds < 2) {
-      return;
-    }
-
+    // Jangan proses jika sedang memproses scan lain
     if (_isProcessing) return;
+
+    // Langsung abaikan QR yang sudah berhasil di-scan sebelumnya
+    if (_scannedQrCodes.contains(qrCode)) return;
 
     setState(() {
       _isProcessing = true;
-      _lastScanTime = DateTime.now();
     });
 
     final provider = Provider.of<AttendanceProvider>(context, listen: false);
@@ -51,6 +51,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
     try {
       final message = await provider.scanQr(qrCode);
       if (!mounted) return;
+
+      // Scan berhasil → tambahkan ke Set agar tidak di-scan ulang
+      _scannedQrCodes.add(qrCode);
 
       // Success feedback
       ScaffoldMessenger.of(context).showSnackBar(
@@ -69,7 +72,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      // Error feedback
+      // Error feedback (QR gagal TIDAK ditambahkan ke Set, bisa di-retry)
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(

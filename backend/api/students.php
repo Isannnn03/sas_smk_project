@@ -84,30 +84,15 @@ function generateQrCodePayload(int $studentId, string $nis): string
 {
     // Secret key statis (idealnya dipindahkan ke .env atau config.php)
     $secretKey = 'SAS_SMK_SECRET_KEY_2026';
-    
-    // Generate UUID v4 sederhana
-    $uuid = sprintf(
-        '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
-        mt_rand(0, 0xffff),
-        mt_rand(0, 0x0fff) | 0x4000,
-        mt_rand(0, 0x3fff) | 0x8000,
-        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
-    );
 
     // Buat raw string untuk signature
-    $dataString = $studentId . '|' . $nis . '|' . $uuid;
-    $signature  = hash_hmac('sha256', $dataString, $secretKey);
+    $dataString = $studentId . '|' . $nis;
+    // Ambil 16 karakter pertama dari HMAC (cukup untuk anti-forgery pada QR)
+    $signature  = substr(hash_hmac('sha256', $dataString, $secretKey), 0, 16);
 
-    // Payload final untuk QR Code
-    $payload = [
-        'student_id'     => $studentId,
-        'nis'            => $nis,
-        'uuid'           => $uuid,
-        'signature_hash' => $signature
-    ];
-
-    return json_encode($payload);
+    // Format compact: ~30-40 karakter vs ~170 karakter JSON
+    // Contoh: SAS|1|2024001|a1b2c3d4e5f6g7h8
+    return 'SAS|' . $studentId . '|' . $nis . '|' . $signature;
 }
 
 // =============================================================================
@@ -276,10 +261,10 @@ function handleCreateStudent(): void
 
     $newId = (int) $pdo->lastInsertId();
 
-    // --- Generate QR Code JSON payload bersignature ---
+    // --- Generate QR Code compact payload bersignature ---
     $qrCode = generateQrCodePayload($newId, $nis);
 
-    // --- Update siswa dengan QR code JSON final ---
+    // --- Update siswa dengan QR code compact final ---
     $pdo->prepare('UPDATE students SET qr_code = :qr_code WHERE id = :id')
         ->execute([':qr_code' => $qrCode, ':id' => $newId]);
 

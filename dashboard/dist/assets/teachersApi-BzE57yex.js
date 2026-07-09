@@ -1,0 +1,1 @@
+import{M as t}from"./index-BHG5e_AK.js";const i={list:(e={})=>t.get("/teachers.php?action=list",{params:e}),detail:e=>t.get(`/teachers.php?action=detail&id=${e}`),create:e=>t.post("/teachers.php?action=create",e),update:(e,a)=>t.put(`/teachers.php?action=update&id=${e}`,a),delete:e=>t.delete(`/teachers.php?action=delete&id=${e}`)};export{i as t};

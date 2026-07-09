@@ -17,8 +17,8 @@ class AttendanceSessionModel {
 
   factory AttendanceSessionModel.fromJson(Map<String, dynamic> json) {
     return AttendanceSessionModel(
-      id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
-      scheduleId: json['schedule_id'] is int ? json['schedule_id'] : int.parse(json['schedule_id'].toString()),
+      id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      scheduleId: json['schedule_id'] is int ? json['schedule_id'] : int.tryParse(json['schedule_id']?.toString() ?? '0') ?? 0,
       date: json['date'] ?? '',
       status: json['status'] ?? 'aktif',
       totalHadir: json['total_hadir'] ?? 0,
@@ -46,11 +46,11 @@ class AttendanceRecordModel {
 
   factory AttendanceRecordModel.fromJson(Map<String, dynamic> json) {
     return AttendanceRecordModel(
-      id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
-      studentId: json['student_id'] is int ? json['student_id'] : int.parse(json['student_id'].toString()),
+      id: json['attendance_id'] is int ? json['attendance_id'] : int.tryParse(json['attendance_id']?.toString() ?? '0') ?? 0,
+      studentId: json['student_id'] is int ? json['student_id'] : int.tryParse(json['student_id']?.toString() ?? '0') ?? 0,
       studentName: json['student_name'] ?? '',
       nis: json['nis'] ?? '',
-      status: json['status'] ?? 'belum_scan',
+      status: json['attendance_status'] ?? 'belum_scan',
       scanTime: json['scan_time'],
     );
   }

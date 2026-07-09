@@ -1,37 +1,33 @@
 <?php
 require 'backend/config/database.php';
 
+/**
+ * Generate QR Code payload dalam format compact.
+ * Format: SAS|student_id|nis|signature_16chars
+ * Total ~30-40 karakter (vs ~170 karakter format JSON lama)
+ */
 function generateQrCodePayload(int $studentId, string $nis): string
 {
     $secretKey = 'SAS_SMK_SECRET_KEY_2026';
-    $uuid = sprintf(
-        '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff),
-        mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000,
-        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
-    );
-    $dataString = $studentId . '|' . $nis . '|' . $uuid;
-    $signature  = hash_hmac('sha256', $dataString, $secretKey);
-    $payload = [
-        'student_id'     => $studentId,
-        'nis'            => $nis,
-        'uuid'           => $uuid,
-        'signature_hash' => $signature
-    ];
-    return json_encode($payload);
+    $dataString = $studentId . '|' . $nis;
+    $signature  = substr(hash_hmac('sha256', $dataString, $secretKey), 0, 16);
+    return 'SAS|' . $studentId . '|' . $nis . '|' . $signature;
 }
 
 $pdo = getDB();
-$stmt = $pdo->query("SELECT id, nis FROM students WHERE qr_code NOT LIKE '{%'");
+
+// Regenerate SEMUA QR code siswa ke format compact baru
+$stmt = $pdo->query("SELECT id, nis, qr_code FROM students");
 $count = 0;
 
 while ($row = $stmt->fetch()) {
-    $newQr = generateQrCodePayload($row['id'], $row['nis']);
+    $newQr = generateQrCodePayload((int)$row['id'], $row['nis']);
     $pdo->prepare("UPDATE students SET qr_code = :qr WHERE id = :id")->execute([
         ':qr' => $newQr,
         ':id' => $row['id']
     ]);
+    echo "  [{$row['id']}] {$row['nis']} => {$newQr}\n";
     $count++;
 }
 
-echo "Fixed $count legacy QR codes!\n";
+echo "\n✅ Regenerated $count QR codes to compact format!\n";

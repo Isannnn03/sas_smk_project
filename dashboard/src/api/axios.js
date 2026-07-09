@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'http://localhost/sas%20smk%20project/sas_smk_project/backend/api',
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000
 })
